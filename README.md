@@ -31,7 +31,7 @@ pip install -r requirements.txt
 pip install groq numpy sounddevice python-dotenv
 ```
 
-Create a `.env` file in the project root:
+Create a `.env` file in the project root (copy from `.env.example`):
 
 ```
 GROQ_API_KEY=your_key_here
