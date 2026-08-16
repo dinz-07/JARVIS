@@ -1,0 +1,10 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+voice_input.wav
+voice_output.wav
+wake_log.txt
+wake_off.flag
+jarvis_out.txt
+jarvis_err.txt
