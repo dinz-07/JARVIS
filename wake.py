@@ -2,6 +2,7 @@ import asyncio
 import io
 import math
 import re
+import subprocess
 import sys
 import time
 import wave
@@ -100,6 +101,27 @@ def wake_command(low):
     return None
 
 
+def _ui_running():
+    try:
+        out = subprocess.run(
+            ["powershell", "-NoProfile", "-Command",
+             "Get-Process flet -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowTitle -like '*JARVIS*' }"],
+            capture_output=True, text=True, timeout=15,
+        )
+        return bool(out.stdout and out.stdout.strip())
+    except Exception:
+        return False
+
+
+def _launch_ui():
+    try:
+        subprocess.Popen([sys.executable, "main.py"], cwd=str(ROOT))
+        return True
+    except Exception as exc:
+        _log("UI LAUNCH ERROR :: " + str(exc)[:100])
+        return False
+
+
 async def main():
     if _disabled():
         _log("wake listener DISABLED (wake_off.flag present) — delete the flag to re-enable")
@@ -128,8 +150,16 @@ async def main():
                 _log("ignored utterance :: " + (text or "(none)"))
                 continue
             _log("WAKE WORD :: command = " + (cmd or "(empty)"))
-            if not cmd:
-                response = "At your service, sir."
+            want_ui = not cmd or any(p in low for p in (
+                "open jarvis", "launch jarvis", "open the interface", "start jarvis", "show the interface",
+            ))
+            if want_ui:
+                if _ui_running():
+                    response = "The interface is already open, sir."
+                elif _launch_ui():
+                    response = "Opening the interface, sir."
+                else:
+                    response = "Unable to launch the interface, sir."
             else:
                 response = await app.engine.process(cmd, voice=True)
                 if app.last_action == "module":

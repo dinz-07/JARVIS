@@ -63,7 +63,7 @@ Or double-click `jarvis.bat` (Windows).
 python wake.py
 ```
 
-Listens for the wake word without the UI. `wake_on.bat` enables auto-start at login, `wake_off.bat` disables it.
+Listens for the wake word without the UI. Say "hey jarvis" or "jarvis open jarvis" to launch the desktop interface, or speak a command directly (it answers by voice). `wake_on.bat` enables auto-start at login, `wake_off.bat` disables it.
 
 ## Structure
 
