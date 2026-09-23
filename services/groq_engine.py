@@ -1,4 +1,5 @@
 import asyncio
+import json
 import math
 import os
 import threading
@@ -8,6 +9,8 @@ from pathlib import Path
 import numpy as np
 import sounddevice as sd
 from dotenv import load_dotenv
+
+from services.search import search_web
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
@@ -116,19 +119,54 @@ class GroqEngine:
         except Exception:
             pass
 
-    async def chat(self, text, system):
+    async def chat(self, text, system, force_search=False):
         if not self.history or self.history[0].get("role") != "system":
             self.history = [{"role": "system", "content": system}]
         self.history.append({"role": "user", "content": text})
         if len(self.history) > 12:
             self.history = [self.history[0]] + self.history[-10:]
+        if force_search:
+            q, _ = await self._complete(
+                [
+                    {"role": "system", "content": system},
+                    {
+                        "role": "user",
+                        "content": (
+                            "Create ONE concise web search query for this request. "
+                            "Reply with only the query text, nothing else: " + text
+                        ),
+                    },
+                ]
+            )
+            q = q.splitlines()[0].strip()[:200] if q else text[:200]
+            try:
+                found = search_web(q)
+            except Exception:
+                found = ""
+            prompt = (
+                f"User asked: {text}\n\nSEARCH RESULTS:\n{found}\n\n"
+                "Answer the user's request using the search results. "
+                "If the search results are empty, say so and answer from your own knowledge. "
+                "Keep it to 2-4 short sentences and name the source."
+            )
+            result, _ = await self._complete(
+                [{"role": "system", "content": system}, {"role": "user", "content": prompt}]
+            )
+        else:
+            result, _ = await self._complete(self.history)
+        if not self.history or self.history[-1].get("role") != "assistant":
+            self.history.append({"role": "assistant", "content": result})
+        return result.strip()
+
+    async def _complete(self, messages):
         stream = await self.client.chat.completions.create(
-            model=MODEL_CHAT, messages=self.history, stream=True, reasoning_effort="high"
+            model=MODEL_CHAT, messages=messages, stream=True, reasoning_effort="high"
         )
         result = ""
         async for chunk in stream:
-            delta = chunk.choices[0].delta.content
-            if delta:
-                result += delta
-        self.history.append({"role": "assistant", "content": result})
-        return result.strip()
+            if not chunk.choices:
+                continue
+            delta = chunk.choices[0].delta
+            if delta and delta.content:
+                result += delta.content
+        return result.strip(), []

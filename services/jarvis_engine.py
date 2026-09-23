@@ -1,5 +1,6 @@
 import datetime
 import random
+import re
 import webbrowser
 
 from app.state import LISTENING, SPEAKING, THINKING, IDLE
@@ -59,6 +60,36 @@ WIT_LINES = [
 ]
 
 
+def _site_url(alias, query):
+    q = re.sub(r"[^a-zA-Z0-9._\-\s]", "", query).strip()
+    if alias in ("instagram",):
+        q = q.replace(" ", "")
+        if q:
+            return f"https://www.instagram.com/{q}/"
+    if alias in ("twitter", "x"):
+        q = q.replace(" ", "")
+        if q:
+            return f"https://x.com/{q}"
+    if alias == "github":
+        q = q.replace(" ", "")
+        if q:
+            return f"https://github.com/{q}"
+    if alias == "youtube":
+        if q:
+            return f"https://www.youtube.com/results?search_query={q.replace(' ', '+')}"
+    if alias in ("linkedin",):
+        if q:
+            return f"https://www.google.com/search?q=site:linkedin.com+{q.replace(' ', '+')}"
+        return "https://www.linkedin.com/search/results/?keywords="
+    if alias == "maps":
+        if q:
+            return f"https://www.google.com/maps/search/{q.replace(' ', '+')}"
+    if alias == "google":
+        if q:
+            return f"https://www.google.com/search?q={q.replace(' ', '+')}"
+    return None
+
+
 class JarvisEngine:
     def __init__(self, app):
         self.app = app
@@ -72,6 +103,28 @@ class JarvisEngine:
 
         if not raw:
             return self._reply("Awaiting instruction, sir.")
+
+        if low.startswith(("search for ", "search ")):
+            q = low
+            for prefix in ("search for ", "search "):
+                if q.startswith(prefix):
+                    q = q[len(prefix):]
+                    break
+            q = re.sub(r"^the web (for |about )?", "", q).strip(" ,:.")
+            if not q:
+                return self._reply("Search query empty, sir.")
+            if self.app.groq.available:
+                try:
+                    self.app.state.log("WEB SEARCH :: " + q.upper()[:48])
+                    return await self.app.groq.chat(
+                        f"Search the web for: {q}. Summarize the key findings, sir.",
+                        self._system_prompt(),
+                        force_search=True,
+                    )
+                except Exception as exc:
+                    self.app.state.log("SEARCH ERROR :: " + str(exc)[:80])
+            webbrowser.open(f"https://www.google.com/search?q={q.replace(' ', '+')}")
+            return self._reply(f"Searching the web for {q}, sir.")
 
         if any(k in low for k in ("status", "system status", "how is", "system check", "health")):
             return await self._status(voice)
@@ -100,6 +153,25 @@ class JarvisEngine:
 
         if low.startswith(("open ", "launch ", "go to ")):
             name = low.split(" ", 1)[1]
+            name = re.sub(r"\s+on\s+linkedin$", " linkedin", name)
+            m = re.match(r"^([a-zA-Z0-9._\-@\s]+)\s+(instagram|x|twitter|github|linkedin)(?:\s+(?:id|profile|page))?$", name)
+            if m:
+                alias = m.group(2)
+                q = m.group(1).strip(" @:-")
+                url = _site_url(alias, q) if q else SITES.get(alias)
+                if url:
+                    webbrowser.open(url)
+                    return self._reply(f"Opening {alias.title()} for {q}, sir.")
+            for alias in SITES:
+                if name == alias or name.startswith(alias + " ") or name.startswith(alias + "@"):
+                    q = name[len(alias):].strip(" @:-")
+                    q = re.sub(r"^(id|profile|page)\s+", "", q)
+                    url = _site_url(alias, q) if q else SITES[alias]
+                    if url:
+                        webbrowser.open(url)
+                        if q:
+                            return self._reply(f"Opening {alias.title()} for {q}, sir.")
+                        return self._reply(f"Opening {alias.title()} in your browser, sir.")
             for alias, mod in MODULE_ALIASES.items():
                 if alias in name:
                     self.app.open_module(mod)
@@ -145,19 +217,22 @@ class JarvisEngine:
 
         if self.app.groq.available:
             try:
-                now = datetime.datetime.now()
-                system = (
-                    "You are JARVIS, a concise and witty AI assistant running on the user's PC. "
-                    "Keep replies to 2-4 short sentences. "
-                    "The user can open modules SYSTEM, WEATHER, CALENDAR, TASKS, MUSIC, EMAIL, SECURITY, "
-                    "BROWSER via the module cards or commands like 'open weather'. "
-                    f"Local time is {now.strftime('%A %H:%M')}."
-                )
-                return await self.app.groq.chat(raw, system)
+                return await self.app.groq.chat(raw, self._system_prompt())
             except Exception as exc:
                 self.app.state.log("GROQ ERROR :: " + str(exc)[:80])
 
         return self._reply(random.choice(WIT_LINES))
+
+    def _system_prompt(self):
+        now = datetime.datetime.now()
+        return (
+            "You are JARVIS, a concise and witty AI assistant running on the user's PC. "
+            "Keep replies to 2-4 short sentences. "
+            "The user can open modules SYSTEM, WEATHER, CALENDAR, TASKS, MUSIC, EMAIL, SECURITY, "
+            "BROWSER via the module cards or commands like 'open weather'. "
+            "Commands starting with 'search' trigger a live web search whose results are given to you."
+            f"Local time is {now.strftime('%A %H:%M')}."
+        )
 
     async def _status(self, voice):
         await self.app.telemetry.refresh()

@@ -6,7 +6,10 @@ A desktop AI command center built with [Flet](https://flet.dev), styled like an 
 
 - **Full voice agent** — Groq-powered pipeline: speech-to-text (whisper), LLM reasoning (gpt-oss), text-to-speech (orpheus)
 - **Barge-in conversation** — speak anytime while JARVIS is talking
+- **Web search answers** — say or type "search for X" / "search X" and JARVIS runs a live web search (Wikipedia + DuckDuckGo) and answers from the results, citing the source; falls back to a Google browser tab if Groq is unavailable
+- **Profile shortcuts** — "open instagram <id>", "open x <handle>", "open github <user>", "open linkedin <name>" jumps straight to the profile or a profile search
 - **Wake word mode** — runs headless (no window), listens in the background, opens the desktop UI on trigger
+- **Voice site commands** — "open instagram", "open youtube search for X", "open github <username>" jump straight to the profile/search page
 - **State-driven core animations** — standby, listening (radar + mic waveform), thinking (chasing arcs + scan beam), speaking (voice-reactive waveform), executing (progress sweep) — each with its own color
 - **8 modules** — system, weather, calendar, tasks, music, email, security, browser (open with `1`–`8` or voice)
 - **Live HUD** — CPU / GPU / RAM / network / battery telemetry with connector lines
@@ -63,7 +66,7 @@ Or double-click `jarvis.bat` (Windows).
 python wake.py
 ```
 
-Listens for the wake word without the UI. Say "hey jarvis" or "jarvis open jarvis" to launch the desktop interface, or speak a command directly (it answers by voice). `wake_on.bat` enables auto-start at login, `wake_off.bat` disables it.
+Listens for the wake word without the UI. Say "hey jarvis" or "jarvis open jarvis" to launch the desktop interface, or speak a command directly (it answers by voice). `wake_on.bat` enables auto-start at login, `wake_off.bat` disables it, and `wake_toggle.bat` flips between the two.
 
 ## Structure
 
